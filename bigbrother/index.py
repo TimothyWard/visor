@@ -16,6 +16,7 @@ import re
 app = Flask(__name__)
 
 tracks = [
+    # Some quick and easy loaded tracks for testing
     # Click('Cialis', '1.1.1.1', AdFormat['MOBILE']),
     # Impression('Viagra', '2.2.2.2', AdFormat['TABLET']),
     # Close('Levitra', '3.3.3.3', AdFormat['DESKTOP'], "CLOSE"),
@@ -32,14 +33,17 @@ def get_root():
 @app.route('/track/statistics')
 def get_statistics():
 
+    # get the tracking events (includes URL parameter parsing/filtering)
     tracking_events = [_get_schema_instance(te["track_type"]).make_track_event(te) for te in _get_tracking_events()]
 
+    # sort our tracked events by type
     track_event_lists = {}
     track_event_counts = {}
     for tt in [t.value for t in TrackType]:
         track_event_lists[tt] = [te for te in tracking_events if te.track_type == TrackType[tt]]
         track_event_counts[tt] = track_event_lists[tt].__len__()
 
+    # calculate some statistics
     if track_event_counts[TrackType.IMPRESSION.value] == 0:
         conversion_rate = 0
     else:
@@ -49,6 +53,8 @@ def get_statistics():
         "conversion_rate": conversion_rate,
         "heatmap_data": [(h.x_pixel, h.y_pixel) for h in track_event_lists[TrackType.HOVER.value]]
     }
+
+    # return the calculated statistics with a 200 response
     return jsonify(statistics), 200
 
 
@@ -59,9 +65,12 @@ def get_tracking_events():
     return jsonify(_get_tracking_events()), 200
 
 
+# helper method for getting the tracking events (used by GET /track and GET /track/statistics)
 def _get_tracking_events():
 
+    # parse the parameter variables
     filter_vars = _parse_track_query()
+
     track_events = []
 
     # for each type of track event in the requested track events
@@ -83,16 +92,24 @@ def _get_tracking_events():
 
 @app.route('/track', methods=['POST'])
 def add_tracking_event():
+
+    # parse the request body to a generic TrackSchema first
     track = TrackSchema().load(request.get_json())
     track_type = TrackType[track.data['track_type']]
     if track_type not in [TrackType[t.value] for t in TrackType]:
         return "Track Type Is Invalid or Not Specified", 400
+
+    # assuming the TrackSchema detected a valid TrackType, serialize the request to that concrete object type
     track = _get_schema_instance(track_type).make_track_event(request.get_json())
+
+    # add the new object to the persisted datastore
     _persist_track_event(track)
+
+    # return a satus message that all is well with a 200 code
     return "New Tracking Event Successfully Added", 200
 
 
-# a better way might be to include a reference to the Schema class on the Object class (not sure how in Python)
+# helper method for getting the Schema Class instance from a TrackType string/enum
 def _get_schema_instance(track_type):
 
     if isinstance(track_type, str):
@@ -110,14 +127,19 @@ def _get_schema_instance(track_type):
         return CloseSchema(many=True)
 
 
+# the only method that can write new data to the datastore (persistence to a MongoDB would be implemented here)
+# allows for an easy implementation of persistence and makes it easy to change persistence types
 def _persist_track_event(track):
     tracks.append(track)
 
 
+# the only method that can read data from the datastore (persistence with a MongoDB would be implemented here)
+# allows for an easy implementation of persistence and makes it easy to change persistence types
 def _get_track_events_by_type(track_type):
     return [t for t in tracks if t.track_type == track_type]
 
 
+# helper method to filter the data based on filter_vars (from request URL parameters)
 def _get_filtered_data(data, filter_vars):
     return filter(
         lambda t:
@@ -131,9 +153,10 @@ def _get_filtered_data(data, filter_vars):
     )
 
 
+# parse the /track URL parameters and assign defaults, returns a dictionary of filter variables
 def _parse_track_query():
 
-    # pull request variables from URL params
+    # pull filter variables from URL params
     track_type = request.args.get('track_type')
     ad_name = request.args.get('ad_name')
     start_ip = request.args.get('start_ip')
@@ -180,6 +203,7 @@ def _parse_track_query():
     else:
         end_timestamp = dt.strptime(end_timestamp.__str__(), "%Y-%m-%d %H:%M:%S.%f")
 
+    # return the dictionary with the filter parameters
     return {
         "allowed_types": allowed_types,
         "allowed_names": allowed_names,
