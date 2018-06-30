@@ -110,6 +110,7 @@ def add_tracking_event():
 
 
 # helper method for getting the Schema Class instance from a TrackType string/enum
+# todo : explore using a class variable to the Schema class type
 def _get_schema_instance(track_type):
 
     if isinstance(track_type, str):
@@ -204,6 +205,7 @@ def _parse_track_query():
         end_timestamp = dt.strptime(end_timestamp.__str__(), "%Y-%m-%d %H:%M:%S.%f")
 
     # return the dictionary with the filter parameters
+    # todo change this to an object type for cleaner access throughout code
     return {
         "allowed_types": allowed_types,
         "allowed_names": allowed_names,
